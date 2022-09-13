@@ -98,7 +98,7 @@ def create_dataset_filepaths(dataset_csv, root_audio_dir, file_format=".mp3"):
         if key not in ['work_id', 'track_id']:
             raise IOError(warn)
 
-    dataset['filepath'] = dataset.apply(lambda x: root_audio_dir + x.work_id + "/" + x.track_id + file_format, axis=1)
+    dataset['filepath'] = dataset.apply(lambda x: root_audio_dir + str(x.work_id) + "/" + str(x.track_id) + file_format, axis=1)
     return dataset.filepath.tolist()
 
 

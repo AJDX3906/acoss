@@ -119,51 +119,29 @@ def compute_features_from_list_file(input_txt_file, feature_dir, params=PROFILE)
     _LOG_FILE.info("Process finished in - %s - seconds" % (start_time - time.time()))
 
 
-def batch_feature_extractor(dataset_csv, audio_dir, feature_dir, n_workers=-1, mode='parallel', params=PROFILE):
-    """
-    Compute parallelised feature extraction process from a collection of input audio file path txt files
+def batch_feature_extractor(audio_dir, feature_dir, n_workers, extractor_profile):
+    import tempfile
+    import glob
+    from joblib import Parallel, delayed
+    from acoss.extractors import compute_features_from_list_file
 
-    :param
-        dataset_csv: dataset csv file
-        audio_dir: path where the audio files are stored
-        feature_dir: path where the computed audio features should be stored
-        n_workers: no. of workers for parallelisation
-        mode: whether to run the extractor in 'single' or 'parallel' mode.
-        params: profile dict with params
+    temp = tempfile.NamedTemporaryFile(prefix="tmp", dir="./")
 
-    :return: None
-    """
-    if not os.path.exists(feature_dir):
-        os.makedirs(feature_dir)
-    batch_file_dir = "./batches/"
-    create_audio_path_batches(dataset_csv,
-                              dir_to_save=batch_file_dir,
-                              root_audio_dir=audio_dir,
-                              audio_format=params['input_audio_format'])
+    for path, subdirs, files in os.walk(audio_dir):
+        with open(temp.name, 'a') as f:
+            for name in files:
+                if name.endswith(".mp3"):
+                    f.write(f'{os.path.join(path, name)}\n')
 
-    collection_files = glob.glob(batch_file_dir + '*.txt')
+    collection_files = glob.glob(temp.name)
     feature_path = [feature_dir for i in range(len(collection_files))]
-    param_list = [params for i in range(len(collection_files))]
+    param_list = [extractor_profile for i in range(len(collection_files))]
     args = zip(collection_files, feature_path, param_list)
-    _LOG_FILE.info("Computing batch feature extraction using '%s' mode the profile: %s \n" % (mode, params))
-    if mode == 'parallel':
-        Parallel(n_jobs=n_workers, verbose=1)(delayed(compute_features_from_list_file)\
-                                              (cpath, fpath, param) for cpath, fpath, param in args)
-    elif mode == 'single':
-        tic = time.monotonic()
-        progressbar = Bar('acoss.extractor.batch_feature_extractor', 
-                        max=len(args), 
-                        suffix='%(index)d/%(max)d - %(percent).1f%% - %(eta)ds')
-        for cpath, fpath, param in args:
-            compute_features_from_list_file(cpath, fpath, param)
-            progressbar.next()
-        progressbar.finish()
-        _LOG_FILE.info("Single mode feature extraction finished in %s" % (time.monotonic() - tic))
-    else:
-        raise IOError("Wrong value for the parameter 'mode'. Should be either 'single' or 'parallel'")
-    savelist_to_file(_ERRORS,'_erros_acoss.extractors.txt')
-    rmtree(batch_file_dir)
-    _LOG_FILE.info("Log file located at '%s'" % _LOG_FILE_PATH)
+
+    print("Computing batch feature extraction using '%s' mode the profile: %s \n" % ("parallel", extractor_profile))
+
+    Parallel(n_jobs=n_workers, verbose=1)(
+        delayed(compute_features_from_list_file)(cpath, fpath, param) for cpath, fpath, param in args)
 
 
 if __name__ == '__main__':
@@ -176,8 +154,8 @@ if __name__ == '__main__':
                         help="path to the main audio directory of dataset")
     parser.add_argument("-p", "--feature_dir", action="store",
                         help="path to directory where the audio features should be stored")
-    parser.add_argument("-f", "--feature_list", action="store", type=str, default="['hpcp', 'key_extractor', "
-                                                                                  "'crema', 'madmom_features', "
+    parser.add_argument("-f", "--feature_list", action="store", type=str, default="['hpcp', 'crema', "
+                                                                                  "'chroma_cqt', 'chroma_cqt_processed', "
                                                                                   "'mfcc_htk']",
                         help="List of features to compute. Eg. ['hpcp' 'crema']")
     parser.add_argument("-m", "--run_mode", action="store", default='parallel',
@@ -198,12 +176,7 @@ if __name__ == '__main__':
     del updated_profile['features']
     updated_profile['features'] = feature_list
 
-    batch_feature_extractor(dataset_csv=cmd_args.d,
-                            audio_dir=cmd_args.a,
-                            feature_dir=cmd_args.p,
-                            n_workers=cmd_args.n,
-                            mode=cmd_args.m,
-                            params=updated_profile)
+    batch_feature_extractor(audio_dir=cmd_args.a, feature_dir=cmd_args.p, n_workers=cmd_args.n, extractor_profile=updated_profile)
 
     print("... Done ....")
     print(" -- PROFILE INFO -- \n %s" % PROFILE)

@@ -140,9 +140,12 @@ def batch_feature_extractor(audio_dir, feature_dir, n_workers, extractor_profile
 
     print("Computing batch feature extraction using '%s' mode the profile: %s \n" % ("parallel", extractor_profile))
 
-    Parallel(n_jobs=n_workers, verbose=1)(
-        delayed(compute_features_from_list_file)(cpath, fpath, param) for cpath, fpath, param in args)
-
+    try:
+        Parallel(n_jobs=n_workers, verbose=1)(
+            delayed(compute_features_from_list_file)(cpath, fpath, param) for cpath, fpath, param in args)
+    except:
+        print("Skipping extraction for a single file with unkown ID")
+        
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="With command-line args, it does batch feature extraction of  \
